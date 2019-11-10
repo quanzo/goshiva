@@ -1,0 +1,5 @@
+cmd /c echo "QUEUE 2"
+cmd /c ver
+cmd /c echo QUEUE 2 MMMM
+cmd /c php cmd0.php
+:quit

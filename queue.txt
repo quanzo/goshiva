@@ -1,0 +1,11 @@
+cmd /c ver
+:delay 5000
+cmd /c php -i
+# комментарий
+ls
+# коммен
+ls
+ls
+hello.exe -t 100
+:status
+:quit
