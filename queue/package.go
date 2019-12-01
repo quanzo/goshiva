@@ -96,6 +96,7 @@ func (this *Queue) GetFile() string {
 
 /**
 * Прочитать строку из очереди
+* Комментарий начинается с # - они игнорируются
 *
  */
 func (this *Queue) readString(f *os.File) (string, error) {
@@ -125,6 +126,10 @@ func (this *Queue) readString(f *os.File) (string, error) {
 	return str, err
 } // end readString
 
+/**
+* Возможные замены в команде
+*
+ */
 func (this *Queue) replaceParams(s string) string {
 	r := strings.NewReplacer("%queue%", this.fn)
 	return r.Replace(s)
