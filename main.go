@@ -1,5 +1,14 @@
-// shiva project main.go
 package main
+
+/*
+Запуск команд из очереди, заданной в файле
+
+При чтении, файл очереди не блокируется и его можно дописывать
+Окончание команды - перевод строки - \n
+%queue% в команде будет заменен на полный путь к файлу очереди
+Если строка начинается с : то это внутренняя команда
+
+*/
 
 import (
 	"fmt"
@@ -17,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"./control"
+	"./control" // ввод и исполнение команд с консоли
 	"./process"
 	"./queue"
 	"./writecontrol"
@@ -31,7 +40,8 @@ var cmdCounter = 0                // счетчик, отправленных н
 //var logger, output *log.Logger    //
 var showProgramMess bool = true // показывать или нет сообщения программы
 var delayQueueNext_ms int = 1   // задержка после получения команды из очереди (если команда пуста)
-var stop bool = false
+var waitComplete bool = false   // true - для продолжения выполнения очереди, задания в очереди должны быть выполнены полностью и лишь затем очередь будет продолжена
+var stop bool = false           // если установить в true - очередь будет прервана
 var absDir string
 var cmdQueue *queue.Queue
 
@@ -74,36 +84,44 @@ func main() {
 		})
 
 		for !stop && notEmptyQueue { // перебираем очередь
-			cmd, err := cmdQueue.Next() // выбираем команду из очереди
-			if len(cmd) > 0 {
-				if strings.Index(cmd, ":") == 0 { // в очереди команд обнаружена внутренняя команда
-					echo(controller(string([]rune(cmd)[1:])))
-				} else {
-					ifStartCmd = false
-					for !stop && !ifStartCmd {
-						// если есть свободные слоты, то будет выполнена команда
-						ifStartCmd = process.Start(strconv.Itoa(cmdCounter), cmd, func(s string) {
-							fmt.Fprintln(*commandOutput, s)
-						})
-						if ifStartCmd {
-							echo(fmt.Sprintf("#%d Start %s", cmdCounter, cmd))
-							if delayAfterStartCmd_ms > 0 {
-								time.Sleep(time.Duration(delayAfterStartCmd_ms) * time.Millisecond)
+			/*
+				Если ждем исполнение очереди, то кол-во запущенных процессов для продолжения == 0. И пока ждем - очередь не читаем
+				Или не ждем исполнение очереди, то продолжаем
+			*/
+			if (waitComplete && process.CountRunning() == 0) || !waitComplete {
+				waitComplete = false
+				cmd, err := cmdQueue.Next() // выбираем команду из очереди
+				if len(cmd) > 0 {           // команда выбрана
+					if strings.Index(cmd, ":") == 0 { // в очереди команд обнаружена внутренняя команда
+						echo(controller(string([]rune(cmd)[1:])))
+					} else {
+						ifStartCmd = false
+						for !stop && !ifStartCmd {
+							// если есть свободные слоты, то будет выполнена команда
+							ifStartCmd = process.Start(strconv.Itoa(cmdCounter), cmd, func(s string) {
+								fmt.Fprintln(*commandOutput, s)
+							})
+							if ifStartCmd {
+								echo(fmt.Sprintf("#%d Start %s", cmdCounter, cmd))
+								if delayAfterStartCmd_ms > 0 {
+									time.Sleep(time.Duration(delayAfterStartCmd_ms) * time.Millisecond)
+								}
+								cmdCounter++
 							}
-							cmdCounter++
+							runtime.Gosched() // выделим таймслот для горутин
 						}
-						runtime.Gosched() // выделим таймслот для горутин
+					}
+
+				} else if delayQueueNext_ms > 0 { // задержка опроса очереди (если там ничего нет)
+					time.Sleep(time.Duration(delayQueueNext_ms) * time.Millisecond)
+				}
+				if err != nil {
+					if !waitQueueMode { // если установлена опция ожидания данных в очереди
+						notEmptyQueue = false // продолжаем цмкл и ожидаем данные в очереди
 					}
 				}
+			}
 
-			} else if delayQueueNext_ms > 0 { // задержка опроса очереди (если там ничего нет)
-				time.Sleep(time.Duration(delayQueueNext_ms) * time.Millisecond)
-			}
-			if err != nil {
-				if !waitQueueMode { // если установлена опция ожидания данных в очереди
-					notEmptyQueue = false // продолжаем цмкл и ожидаем данные в очереди
-				}
-			}
 		}
 
 		// подождем завершения всех задач
@@ -263,6 +281,10 @@ func controller(cmd string) string {
 		switch parts[0] {
 		case "rc", "running-count": // вывод кол-ва запущенных команд
 			result = "MESSAGE: Count running = " + strconv.Itoa(process.CountRunning())
+		case "wait_complete", "wc": // команда предписывает ждать исполнения всех уже запущенных команд для продолжения очереди
+			if process.CountRunning() > 0 {
+				result = "MESSAGE: Wait complete..."
+			}
 		case "q", "queue": // показать имя файла-очереди
 			result = "MESSAGE: Queue file = " + cmdQueue.GetFile()
 		case "s", "status": // текущий статус обработки очереди
