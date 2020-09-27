@@ -71,13 +71,9 @@ func (this *process) run() {
 	// определим путь до команды
 	pathCmd, err := exec.LookPath(parts[0])
 	if err == nil {
-		var args []string
-		if len(parts) > 1 { // аргументы команды
-			args = parts[1:]
-		}
 		// создадим команду
 		cmd := exec.Command(pathCmd)
-		cmd.Args = args
+		cmd.Args = parts
 		// запустим команду и получим ее вывод
 		cmdOutput, err := cmd.CombinedOutput()
 

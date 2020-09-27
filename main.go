@@ -284,6 +284,7 @@ func controller(cmd string) string {
 		case "wait_complete", "wc": // команда предписывает ждать исполнения всех уже запущенных команд для продолжения очереди
 			if process.CountRunning() > 0 {
 				result = "MESSAGE: Wait complete..."
+				waitComplete = true
 			}
 		case "q", "queue": // показать имя файла-очереди
 			result = "MESSAGE: Queue file = " + cmdQueue.GetFile()
